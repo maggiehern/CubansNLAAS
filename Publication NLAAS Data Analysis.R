@@ -642,3 +642,537 @@ TukeyHSD(aov.EDS.migration.weighted, which = 'migrationwave1name')
 
 
 
+
+
+
+
+
+
+
+
+#Repeating analyses on Mexican participant data, post-hoc analysis
+#same steps as before, but now with only Mexican participants
+
+#subset-ting Mexicans from dataset
+mexicans<-subset(df, RANCEST=="Mexican")
+
+#Number of Mexicans born in US
+sum(mexicans$DM1_6 == "1")
+
+#Number of Mexicans born in another country (assuming this means they were born in Mexico)
+sum(mexicans$DM1_6 == "2")
+
+#Creating migration wave bins using the same methodology as above with Cubans (Method 1: Binning based on natural lulls in the data combined with historical events)
+mexicans$migrationwave1 <- cut(mexicans$yeararrival,
+                             breaks = c(1953, 1965, 1975, 1977, 1987, 1991, 2002),
+                             include.lowest = T,
+                             right = F)
+
+#Renaming bins
+mexicans$migrationwave1name <- revalue(mexicans$migrationwave1, c ("[1953,1965)" = "1953-1965",
+                                                               "[1965,1975)" = "1965-1975",
+                                                               "[1975,1977)" = "No Wave (Early) Mexican",
+                                                               "[1977,1987)" = "1977-1987",
+                                                               "[1987,1991)" = "No Wave (Late) Mexican",
+                                                               "[1991,2002]" = "1991-2002"))
+custom_colors2 <- c("1953-1965" = "#ffe3d6", 
+                   "1965-1975" = "#ff9e93", 
+                   "1977-1987" = "#78e5c7", 
+                   "1991-2002" = "#a6fdfc")
+
+#Recoding 1st and 2nd gen into migration wave category
+
+mexicans$DM1_7 <-as.character(mexicans$DM1_7)
+mexicans$DM1_6 <-as.character(mexicans$DM1_6)
+mexicans$migrationwave1name<-as.character(mexicans$migrationwave1name)
+
+mexicans$migrationwave1name[mexicans$DM1_7 == '2' & mexicans$DM1_6 == '1'] <- "1gen Mexican"
+mexicans$migrationwave1name[mexicans$DM1_7 == '1' & mexicans$DM1_6 == '1'] <- "1gen Mexican"
+mexicans$migrationwave1name[mexicans$DM1_7 == '3' & mexicans$DM1_6 == '1'] <- "2gen Mexican"
+
+count(mexicans$migrationwave1name == "1gen Mexican")
+count(mexicans$migrationwave1name == "2gen Mexican")
+
+#Number of Mexicans that immigrated to US per year plot, colored by migration waves of interest
+ggplot(mexicans, aes(x=factor(yeararrival), fill=migrationwave1name)) + 
+  geom_bar() + 
+  scale_fill_manual(values = custom_colors2) +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45))
+
+#Number of Mexicans that immigrated to US per year plot, colored by migration waves of interest, removing Mexican Americans born in the US
+mexicans %>%
+  filter(!is.na(yeararrival)) %>%
+  ggplot(aes(x=factor(yeararrival), fill=migrationwave1name)) + 
+  geom_bar() + 
+  scale_fill_manual(values = custom_colors2) +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45))
+
+#Counts in each bin
+ggplot(mexicans, aes(x=factor(migrationwave1name))) + 
+  geom_bar() + theme_minimal()
+
+count(mexicans$migrationwave1name == "1953-1965")
+count(mexicans$migrationwave1name == "1965-1975")
+count(mexicans$migrationwave1name == "No Wave (Early) Mexican")
+count(mexicans$migrationwave1name == "1977-1987")
+count(mexicans$migrationwave1name == "No Wave (Late) Mexican")
+count(mexicans$migrationwave1name == "1991-2002")
+count(mexicans$migrationwave1name == "1gen Mexican")
+count(mexicans$migrationwave1name == "2gen Mexican")
+
+#Subset of only migration waves of interest
+mexicanwaves<- subset(mexicans, migrationwave1name =='1953-1965' | 
+                                migrationwave1name =='1965-1975' | 
+                                migrationwave1name =='1977-1987' | 
+                                migrationwave1name =='1991-2002')
+
+#incorporating sampling weights (this happens again later in the script when I create new variables that have to be reincrporated into the survey design)
+survey_design_mexican <- svydesign(ids = ~1, weights = ~NLAASWGT, data = mexicanwaves)
+
+#Plot of counts, Mexican
+ggplot(mexicanwaves, aes(x=migrationwave1name, fill = migrationwave1name)) + 
+  geom_bar()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal()
+
+#Number of Mexicans that immigrated to US per year plot, colored by migration wave for dataset with just individuals of interest
+ggplot(mexicanwaves, aes(x=factor(yeararrival), fill = migrationwave1name)) + 
+  geom_bar()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45)) + theme(legend.position = "none")
+
+#gender distribution across migration wave, Mexican
+mexicanwaves$SEX <-as.factor(mexicanwaves$SEX)
+mexicanwaves$SEX <- revalue(mexicanwaves$SEX, c ("1" = "Male","2" = "Female"))
+
+table(mexicanwaves$migrationwave1name, mexicanwaves$SEX)
+
+#regional distribution across migration wave, Mexican
+mexicanwaves$REGION <-as.factor(mexicanwaves$REGION)
+mexicanwaves$REGION <- revalue(mexicanwaves$REGION, c ("1" = "Northeast","2" = "Midwest", "3"= "South", "4"="West"))
+
+table(mexicanwaves$migrationwave1name, mexicanwaves$REGION)
+
+#average age, se, and sd across migration waves, weighted, Mexican
+weighted_age_mexican<-svyby(~Age, ~migrationwave1name, design = survey_design_mexican, FUN = svymean, na.rm = TRUE)
+
+weighted_age_mexican
+
+weighted_age_sd_mexican<-svyby(~Age, ~migrationwave1name, design = survey_design_mexican, FUN = svyvar)
+weighted_age_sd_2_mexican <- sqrt(weighted_age_sd_mexican$Age)
+weighted_age_sd_2_mexican
+
+#plots for age across migration wave, weighted, Mexican
+
+ggplot(mexicanwaves, aes(x=migrationwave1name, y=Age, fill = migrationwave1name)) + 
+  geom_violin()+
+  geom_point(data=weighted_age_mexican, aes(y=Age), shape=20, size=5, color = "#3ab681") +
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + ylim(0,100)
+
+ggplot(mexicanwaves, aes(x=migrationwave1name, y=Age, fill = migrationwave1name)) + 
+  geom_boxplot()+
+  geom_point(data=weighted_age_mexican, aes(y=Age), shape=20, size=5, color = "#3ab681") +
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + ylim(0,100)
+
+#average WHODAS CARESCORE score by migration wave, weighted, Mexican
+weighted_CARESCORE_mexican<-svyby(~CARESCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svymean, na.rm = TRUE)
+
+weighted_CARESCORE_mexican
+
+weighted_CARESCORE_sd_mexican<-svyby(~CARESCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svyvar)
+weighted_CARESCORE_sd_2_mexican <- sqrt(weighted_CARESCORE_sd_mexican$CARESCORE)
+weighted_CARESCORE_sd_2_mexican
+
+CARE.plot.weighted.mexican<-ggplot(mexicanwaves, aes(x=migrationwave1name, y=CARESCORE, fill = migrationwave1name)) + 
+  geom_boxplot()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none") + ylim(0,100)+
+  geom_point(data=weighted_CARESCORE_mexican, aes(y=CARESCORE), shape=20, size=5, color = "#3ab681")
+
+CARE.plot.weighted.mexican
+
+#average WHODAS COGSCORE score by migration wave, weighted, Mexican
+weighted_COGSCORE_mexican<-svyby(~COGSCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svymean, na.rm = TRUE)
+
+weighted_COGSCORE_mexican
+
+weighted_COGSCORE_sd_mexican<-svyby(~COGSCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svyvar)
+weighted_COGSCORE_sd_2_mexican <- sqrt(weighted_COGSCORE_sd_mexican$COGSCORE)
+weighted_COGSCORE_sd_2_mexican
+
+COG.plot.weighted.mexican<-ggplot(mexicanwaves, aes(x=migrationwave1name, y=COGSCORE, fill = migrationwave1name)) + 
+  geom_boxplot()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none") + ylim(0,100)+
+  geom_point(data=weighted_COGSCORE_mexican, aes(y=COGSCORE), shape=20, size=5, color = "#3ab681")
+
+COG.plot.weighted.mexican
+
+#average WHODAS MOVESCORE score by migration wave, weighted
+weighted_MOVESCORE_mexican<-svyby(~MOVESCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svymean, na.rm = TRUE)
+
+weighted_MOVESCORE_mexican
+
+weighted_MOVESCORE_sd_mexican<-svyby(~MOVESCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svyvar)
+weighted_MOVESCORE_sd_2_mexican <- sqrt(weighted_MOVESCORE_sd_mexican$MOVESCORE)
+weighted_MOVESCORE_sd_2_mexican
+
+MOVE.plot.weighted.mexican<-ggplot(mexicanwaves, aes(x=migrationwave1name, y=MOVESCORE, fill = migrationwave1name)) + 
+  geom_boxplot()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none") + ylim(0,100)+
+  geom_point(data=weighted_MOVESCORE_mexican, aes(y=MOVESCORE), shape=20, size=5, color = "#3ab681")
+
+MOVE.plot.weighted.mexican
+
+#average WHODAS OUTROLESCORE score by migration wave, weighted
+weighted_OUTROLESCORE_mexican<-svyby(~OUTROLESCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svymean, na.rm = TRUE)
+
+weighted_OUTROLESCORE_mexican
+
+weighted_OUTROLESCORE_sd_mexican<-svyby(~OUTROLESCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svyvar)
+weighted_OUTROLESCORE_sd_2_mexican <- sqrt(weighted_OUTROLESCORE_sd_mexican$OUTROLESCORE)
+weighted_OUTROLESCORE_sd_2_mexican
+
+OUTROLE.plot.weighted.mexican<-ggplot(mexicanwaves, aes(x=migrationwave1name, y=OUTROLESCORE, fill = migrationwave1name)) + 
+  geom_boxplot()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none") + ylim(0,100)+
+  geom_point(data=weighted_OUTROLESCORE_mexican, aes(y=OUTROLESCORE), shape=20, size=5, color = "#3ab681")
+
+OUTROLE.plot.weighted.mexican
+
+#average WHODAS SOCIALSCORE score by migration wave, weighted
+weighted_SOCIALSCORE_mexican<-svyby(~SOCIALSCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svymean, na.rm = TRUE)
+
+weighted_SOCIALSCORE_mexican
+
+weighted_SOCIALSCORE_sd_mexican<-svyby(~SOCIALSCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svyvar)
+weighted_SOCIALSCORE_sd_2_mexican <- sqrt(weighted_SOCIALSCORE_sd_mexican$SOCIALSCORE)
+weighted_SOCIALSCORE_sd_2_mexican
+
+SOCIAL.plot.weighted.mexican<-ggplot(mexicanwaves, aes(x=migrationwave1name, y=SOCIALSCORE, fill = migrationwave1name)) + 
+  geom_boxplot()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none") + ylim(0,100)+
+  geom_point(data=weighted_SOCIALSCORE_mexican, aes(y=SOCIALSCORE), shape=20, size=5, color = "#3ab681")
+
+SOCIAL.plot.weighted.mexican
+
+#average DISABILITYSCORE by migration wave, weighted
+weighted_DISABILITYSCORE_mexican<-svyby(~DISABILITYSCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svymean, na.rm = TRUE)
+
+weighted_DISABILITYSCORE_mexican
+
+weighted_DISABILITYSCORE_sd_mexican<-svyby(~DISABILITYSCORE, ~migrationwave1name, design = survey_design_mexican, FUN = svyvar)
+weighted_DISABILITYSCORE_sd_2_mexican <- sqrt(weighted_DISABILITYSCORE_sd_mexican$DISABILITYSCORE)
+weighted_DISABILITYSCORE_sd_2_mexican
+
+
+DISABILITY.plot.weighted.mexican<-ggplot(mexicanwaves, aes(x=migrationwave1name, y=DISABILITYSCORE, fill = migrationwave1name)) + 
+  geom_boxplot()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none") + ylim(0,300)+
+  geom_point(data=weighted_DISABILITYSCORE_mexican, aes(y=DISABILITYSCORE), shape=20, size=5, color = "#3ab681")
+
+DISABILITY.plot.weighted.mexican
+
+ggarrange(CARE.plot.weighted.mexican, COG.plot.weighted.mexican, MOVE.plot.weighted.mexican, OUTROLE.plot.weighted.mexican, SOCIAL.plot.weighted.mexican,
+          labels = c("A", "B", "C", "D", "E"),
+          ncol = 3, nrow=2)
+
+ggarrange(CARE.plot.weighted.mexican, COG.plot.weighted.mexican, MOVE.plot.weighted.mexican, OUTROLE.plot.weighted.mexican, SOCIAL.plot.weighted.mexican,
+          labels = c("A", "B", "C", "D", "E"),
+          ncol = 2, nrow=3)
+
+#proportion of people with any disability
+mexicanwaves$CARESCORE.binary <- ifelse(mexicanwaves$CARESCORE > 0, 1, 0)
+mexicanwaves$COGSCORE.binary <- ifelse(mexicanwaves$COGSCORE > 0, 1, 0)
+mexicanwaves$MOVESCORE.binary <- ifelse(mexicanwaves$MOVESCORE > 0, 1, 0)
+mexicanwaves$OUTROLESCORE.binary <- ifelse(mexicanwaves$OUTROLESCORE > 0, 1, 0)
+mexicanwaves$SOCIALSCORE.binary <- ifelse(mexicanwaves$SOCIALSCORE > 0, 1, 0)
+mexicanwaves$disability.binary <- ifelse(mexicanwaves$DISABILITYSCORE > 0, 1, 0)
+
+#chart of proportion with disability
+count_mexicanwaves <- table(mexicanwaves$migrationwave1name, mexicanwaves$disability.binary)
+count_mexicanwaves <- as.data.frame(count_mexicanwaves)
+names(count_mexicanwaves) <- c("migrationwave1name", "disability.binary", "Count")
+
+bar_width <- 0.7
+group_spacing <- 0.8
+
+disability.binary.colors <- c("0" = "#3ab681", "1" = "#9cc9b1")
+
+ggplot(count_mexicanwaves, aes(x=migrationwave1name, y= Count, fill=disability.binary)) +
+  geom_bar(position = position_dodge(width = group_spacing), width = bar_width, stat = "identity") +
+  scale_fill_manual(values = disability.binary.colors) +
+  theme_minimal()
+
+#new survey design to incorporate new variables
+survey_design2_mexican <- svydesign(ids = ~1, weights = ~NLAASWGT, data = mexicanwaves)
+
+#logistic regression models, weighted
+
+logistic.CARESCORE.weighted.mexican <- svyglm(CARESCORE.binary ~ migrationwave1name + Age + SEX + REGION, family = quasibinomial, design = survey_design2_mexican)
+summary(logistic.CARESCORE.weighted.mexican)
+#no wave significant
+
+
+logistic.COGSCORE.weighted.mexican<- svyglm(COGSCORE.binary ~ migrationwave1name + Age + SEX + REGION, family = quasibinomial, design = survey_design2_mexican)
+summary(logistic.COGSCORE.weighted.mexican)
+
+coefficients_COGSCORE_mexican <- coef(logistic.COGSCORE.weighted.mexican)
+odds_ratios_COGSCORE_mexican<-exp(coefficients_COGSCORE_mexican)
+std_errors_COGSCORE_mexican <- summary(logistic.COGSCORE.weighted.mexican)$coefficients[, "Std. Error"]
+lower_ci_COGSCORE_mexican <- odds_ratios_COGSCORE_mexican * exp(-1.96 * std_errors_COGSCORE_mexican)
+upper_ci_COGSCORE_mexican <- odds_ratios_COGSCORE_mexican * exp(1.96 * std_errors_COGSCORE_mexican)
+
+odds_ratio_table_COGSCORE_mexican <- data.frame (
+  Predictor = names(odds_ratios_COGSCORE_mexican),
+  OddsRatio = odds_ratios_COGSCORE_mexican,
+  LowerCI = lower_ci_COGSCORE_mexican,
+  UpperCI = upper_ci_COGSCORE_mexican
+)
+
+odds_ratio_table_COGSCORE_mexican
+
+
+logistic.MOVESCORE.weighted.mexican <- svyglm(MOVESCORE.binary ~ migrationwave1name + Age + SEX + REGION, family = quasibinomial, design = survey_design2_mexican)
+summary(logistic.MOVESCORE.weighted.mexican)
+
+coefficients_MOVESCORE_mexican <- coef(logistic.MOVESCORE.weighted.mexican)
+odds_ratios_MOVESCORE_mexican<-exp(coefficients_MOVESCORE_mexican)
+std_errors_MOVESCORE_mexican <- summary(logistic.MOVESCORE.weighted.mexican)$coefficients[, "Std. Error"]
+lower_ci_MOVESCORE_mexican <- odds_ratios_MOVESCORE_mexican * exp(-1.96 * std_errors_MOVESCORE_mexican)
+upper_ci_MOVESCORE_mexican <- odds_ratios_MOVESCORE_mexican * exp(1.96 * std_errors_MOVESCORE_mexican)
+
+odds_ratio_table_MOVESCORE_mexican <- data.frame (
+  Predictor = names(odds_ratios_MOVESCORE_mexican),
+  OddsRatio = odds_ratios_MOVESCORE_mexican,
+  LowerCI = lower_ci_MOVESCORE_mexican,
+  UpperCI = upper_ci_MOVESCORE_mexican
+)
+
+odds_ratio_table_MOVESCORE_mexican
+
+
+logistic.OUTROLESCORE.weighted.mexican <- svyglm(OUTROLESCORE.binary ~ migrationwave1name + Age + SEX + REGION, family = quasibinomial, design = survey_design2_mexican)
+summary(logistic.OUTROLESCORE.weighted.mexican)
+#no wave significant
+
+
+logistic.SOCIALSCORE.weighted.mexican <- svyglm(SOCIALSCORE.binary ~ migrationwave1name + Age + SEX + REGION, family = quasibinomial, design = survey_design2_mexican)
+summary(logistic.SOCIALSCORE.weighted.mexican)
+
+coefficients_SOCIALSCORE_mexican <- coef(logistic.SOCIALSCORE.weighted.mexican)
+odds_ratios_SOCIALSCORE_mexican<-exp(coefficients_SOCIALSCORE_mexican)
+std_errors_SOCIALSCORE_mexican <- summary(logistic.SOCIALSCORE.weighted.mexican)$coefficients[, "Std. Error"]
+lower_ci_SOCIALSCORE_mexican <- odds_ratios_SOCIALSCORE_mexican * exp(-1.96 * std_errors_SOCIALSCORE_mexican)
+upper_ci_SOCIALSCORE_mexican <- odds_ratios_SOCIALSCORE_mexican * exp(1.96 * std_errors_SOCIALSCORE_mexican)
+
+odds_ratio_table_SOCIALSCORE_mexican <- data.frame (
+  Predictor = names(odds_ratios_SOCIALSCORE_mexican),
+  OddsRatio = odds_ratios_SOCIALSCORE_mexican,
+  LowerCI = lower_ci_SOCIALSCORE_mexican,
+  UpperCI = upper_ci_SOCIALSCORE_mexican
+)
+
+odds_ratio_table_SOCIALSCORE_mexican
+
+
+logistic.DISABILITY.weighted.mexican<- svyglm(disability.binary ~ migrationwave1name + Age + SEX + REGION, family = quasibinomial, design = survey_design2_mexican)
+summary(logistic.DISABILITY.weighted.mexican)
+#no wave significant
+
+#ANOVA for age, weighted
+
+aov.age.weighted.mexican<- aov(Age ~ migrationwave1name + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.age.weighted.mexican)
+TukeyHSD(aov.age.weighted.mexican, which = 'migrationwave1name')
+
+#ANOVA for CARESCORE weighted
+
+aov.CARE.weighted.mexican<-aov(CARESCORE~migrationwave1name + Age + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.CARE.weighted.mexican)
+TukeyHSD(aov.CARE.weighted.mexican, which = 'migrationwave1name')
+
+#ANOVA for COGSCORE weighted
+
+aov.COG.weighted.mexican<-aov(COGSCORE~migrationwave1name + Age + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.COG.weighted.mexican)
+#NOT SIGNIFICANT
+
+#ANOVA for MOVESCORE weighted
+
+aov.MOVE.weighted.mexican<-aov(MOVESCORE~migrationwave1name + Age + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.MOVE.weighted.mexican)
+TukeyHSD(aov.MOVE.weighted.mexican, which = 'migrationwave1name')
+
+#ANOVA for OUTROLESCORE weighted
+
+aov.OUTROLE.weighted.mexican<-aov(OUTROLESCORE~migrationwave1name + Age + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.OUTROLE.weighted.mexican)
+TukeyHSD(aov.OUTROLE.weighted.mexican, which = 'migrationwave1name')
+
+#ANOVA for SOCIALSCORE weighted
+
+aov.SOCIAL.weighted.mexican<-aov(SOCIALSCORE~migrationwave1name + Age + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.SOCIAL.weighted.mexican)
+#NOT SIGNIFICANT
+
+
+#ANOVA for DISABILITYSCORE weighted
+
+aov.DIS.weighted.mexican<-aov(DISABILITYSCORE~migrationwave1name + Age + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.DIS.weighted.mexican)
+TukeyHSD(aov.DIS.weighted.mexican, which = 'migrationwave1name')
+
+#disability score by year arrival, Cubans and Mexicans
+
+ggplot(mexicans, aes(x=yeararrival, y=DISABILITYSCORE)) +
+  geom_point(color='#ff9e93') +
+  geom_smooth(method="loess", formula = y~x, color='#ff9e93', fill = '#ff9e93')+
+  xlim(1918,2004)+
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45))
+
+
+ggplot(cubans, aes(x=yeararrival, y=DISABILITYSCORE)) +
+  geom_point(color='#855b9d') +
+  geom_smooth(method="loess", formula = y~x, color='#855b9d', fill = '#855b9d')+
+  xlim(1918,2004) +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45))
+
+#combined plot
+
+ggplot() +
+  geom_point(data=cubans, aes(x=yeararrival, y=DISABILITYSCORE), color = '#855b9d') +
+  geom_point(data=mexicans, aes(x=yeararrival, y=DISABILITYSCORE), color = '#ff9e93') +
+  geom_smooth(data = cubans, aes(x=yeararrival, y=DISABILITYSCORE), method="loess", color='#855b9d', fill = '#855b9d') +
+  geom_smooth(data = mexicans, aes(x=yeararrival, y=DISABILITYSCORE), method="loess", color='#ff9e93', fill = '#ff9e93' ) +
+  xlim(1918,2004) +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45))
+
+ggplot() +
+  geom_smooth(data = cubans, aes(x=yeararrival, y=DISABILITYSCORE), method="loess", color='#855b9d', fill = '#855b9d') +
+  geom_smooth(data = mexicans, aes(x=yeararrival, y=DISABILITYSCORE), method="loess", color='#ff9e93', fill = '#ff9e93' ) +
+  scale_x_continuous(breaks= seq(1910, 2010, by =10))+
+  coord_cartesian(ylim=c(0,50))+
+  theme(panel.background=element_blank()) + theme(axis.text.x = element_text(angle = 45))
+
+
+#Investigating medical discrimination
+#Variable measured 1-5; None, a little, some, a lot, extreme
+
+survey_design3 <- svydesign(ids = ~1, weights = ~NLAASWGT, data = mexicanwaves)
+
+mexicanwaves$FD21 <-as.numeric(mexicanwaves$FD21)
+
+ggplot(mexicanwaves, aes(x=FD21, fill = migrationwave1name)) + 
+  geom_bar()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none")
+
+
+table(mexicanwaves$migrationwave1name, mexicanwaves$FD21)
+
+#Only 22 people in this dataset have a value for medical discrimination
+
+#Medical discrimination, weighted
+
+weighted_med_dis_mexican<-svyby(~FD21, ~migrationwave1name, design = survey_design3, FUN = svymean, na.rm = TRUE)
+
+weighted_med_dis_mexican
+
+weighted_med_dis_sd_mexican<-svyby(~FD21, ~migrationwave1name, design = survey_design3, FUN = svyvar, na.rm = TRUE)
+weighted_med_dis_sd_2_mexican <- sqrt(weighted_med_dis_sd_mexican$FD21)
+weighted_med_dis_sd_2_mexican
+
+ggplot(mexicanwaves, aes(x=migrationwave1name, y=FD21, fill = migrationwave1name)) + 
+  geom_boxplot()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none") +
+  geom_point(data=weighted_med_dis_mexican, aes(y=FD21), shape=20, size=5, color = "#3ab681")
+
+#ANOVAs medical discrimination, weighted
+
+aov.med.dis.weighted_mexican<- aov(FD21 ~ migrationwave1name+ Age + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.med.dis.weighted_mexican)
+#NOT SIGNIFICANT
+
+#Everyday discrimination
+
+#recoding to factor to be able to replace -9 and -8 values
+mexicanwaves$DS1a <-as.factor(mexicanwaves$DS1a)
+mexicanwaves$DS1a <- revalue(mexicanwaves$DS1a, c("-9" = "0","-8" = "0"))
+
+mexicanwaves$DS1b <-as.factor(mexicanwaves$DS1b)
+mexicanwaves$DS1b <- revalue(mexicanwaves$DS1b, c("-9" = "0","-8" = "0"))
+
+mexicanwaves$DS1c <-as.factor(mexicanwaves$DS1c)
+mexicanwaves$DS1c <- revalue(mexicanwaves$DS1c, c("-9" = "0","-8" = "0"))
+
+mexicanwaves$DS1d <-as.factor(mexicanwaves$DS1d)
+mexicanwaves$DS1d <- revalue(mexicanwaves$DS1d, c("-9" = "0","-8" = "0"))
+
+mexicanwaves$DS1e <-as.factor(mexicanwaves$DS1e)
+mexicanwaves$DS1e <- revalue(mexicanwaves$DS1e, c("-9" = "0","-8" = "0"))
+
+mexicanwaves$DS1f <-as.factor(mexicanwaves$DS1f)
+mexicanwaves$DS1f <- revalue(mexicanwaves$DS1f, c("-9" = "0","-8" = "0"))
+
+mexicanwaves$DS1g <-as.factor(mexicanwaves$DS1g)
+mexicanwaves$DS1g <- revalue(mexicanwaves$DS1g, c("-9" = "0","-8" = "0"))
+
+mexicanwaves$DS1h <-as.factor(mexicanwaves$DS1h)
+mexicanwaves$DS1h <- revalue(mexicanwaves$DS1h, c("-9" = "0","-8" = "0"))
+
+mexicanwaves$DS1i <-as.factor(mexicanwaves$DS1i)
+mexicanwaves$DS1i<- revalue(mexicanwaves$DS1i, c("-9" = "0","-8" = "0"))
+
+#recoding back to numeric to be able to add them and make Everyday Discrimination Score (EDS)
+mexicanwaves$DS1a <-as.numeric(mexicanwaves$DS1a)
+mexicanwaves$DS1b <-as.numeric(mexicanwaves$DS1b)
+mexicanwaves$DS1c <-as.numeric(mexicanwaves$DS1c)
+mexicanwaves$DS1d <-as.numeric(mexicanwaves$DS1d)
+mexicanwaves$DS1e <-as.numeric(mexicanwaves$DS1e)
+mexicanwaves$DS1f <-as.numeric(mexicanwaves$DS1f)
+mexicanwaves$DS1g <-as.numeric(mexicanwaves$DS1g)
+mexicanwaves$DS1h <-as.numeric(mexicanwaves$DS1h)
+mexicanwaves$DS1i <-as.numeric(mexicanwaves$DS1i)
+
+#EDS Score
+mexicanwaves$EDS <- mexicanwaves$DS1a + 
+  mexicanwaves$DS1b + 
+  mexicanwaves$DS1c + 
+  mexicanwaves$DS1d + 
+  mexicanwaves$DS1e + 
+  mexicanwaves$DS1f + 
+  mexicanwaves$DS1g + 
+  mexicanwaves$DS1h + 
+  mexicanwaves$DS1i
+
+#EDS scores range from 9-54. higher score = less discrimination, lower score = more discrimination
+
+#EDS by migration wave, weighted
+
+survey_design4 <- svydesign(ids = ~1, weights = ~NLAASWGT, data = mexicanwaves)
+weighted_EDS_mexican<-svyby(~EDS, ~migrationwave1name, design = survey_design4, FUN = svymean, na.rm = TRUE)
+weighted_EDS_mexican
+
+weighted_EDS_sd_mexican<-svyby(~EDS, ~migrationwave1name, design = survey_design4, FUN = svyvar)
+weighted_EDS_sd_2_mexican <- sqrt(weighted_EDS_sd_mexican$EDS)
+weighted_EDS_sd_2_mexican
+
+ggplot(mexicanwaves, aes(x=migrationwave1name, y=EDS, fill = migrationwave1name)) + 
+  geom_boxplot()+ 
+  scale_fill_manual(values = custom_colors2)+
+  theme_minimal() + theme(legend.position = "none") + ylim(0,60)+
+  geom_point(data=weighted_EDS_mexican, aes(y=EDS), shape=20, size=5, color = "#3ab681")
+
+#ANOVA of EDS by migration wave, weighted
+aov.EDS.migration.weighted_mexican<-aov(EDS~migrationwave1name + Age + SEX + REGION, weights = NLAASWGT, data=mexicanwaves)
+summary(aov.EDS.migration.weighted_mexican)
+TukeyHSD(aov.EDS.migration.weighted_mexican, which = 'migrationwave1name')
+
